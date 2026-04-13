@@ -16,10 +16,8 @@ const peerName = localStorage.getItem("peerName") || `User-${Math.floor(Math.ran
 let activeRepo;
 
 if (typeof globalThis !== 'undefined' && globalThis.__TRELLIS_REPO__) {
-  // If Vite Hot-Reloads, DO NOT create a new database. Reuse the existing one!
   console.log("♻️ [HMR] Reusing existing Automerge Engine. Disk lock protected.");
   activeRepo = globalThis.__TRELLIS_REPO__;
-
 } else {
   // --- 2. FRESH BOOT SEQUENCE ---
   const myUniqueId = `client-${Math.random().toString(36).substring(2, 9)}`;
@@ -32,20 +30,11 @@ if (typeof globalThis !== 'undefined' && globalThis.__TRELLIS_REPO__) {
 
   activeRepo = new Repo({
     peerId: myUniqueId,
-    
-    // 💾 THE HARD DRIVE IS BACK ONLINE! (Namespaced to prevent collisions)
     storage: new IndexedDBStorageAdapter("trellis-local-db"),
-    
-    network: [ 
-      // We re-enable the local broadcast channel so standard browser tabs 
-      // can sync with each other instantly without needing the Hub.
-      //new BroadcastChannelNetworkAdapter(), 
-      wsAdapter 
-    ], 
+    network: [ wsAdapter ], 
     sharePolicy: async (peerId) => true,
   });
 
-  // Save it to global memory so Vite can't destroy it
   if (typeof globalThis !== 'undefined') {
     globalThis.__TRELLIS_REPO__ = activeRepo;
   }
@@ -54,7 +43,6 @@ if (typeof globalThis !== 'undefined' && globalThis.__TRELLIS_REPO__) {
   }
 }
 
-// Export the protected singleton
 export const repo = activeRepo;
 
 // 5. Helper Functions
@@ -74,16 +62,12 @@ export const humanize = (docId) => {
 
 const logActivity = (doc, text, author = "Local User") => {
   if (!doc.activities) doc.activities = []
-  
-  // Add new activity to the top of the list
   doc.activities.unshift({
     id: crypto.randomUUID(),
     text,
     author,
     timestamp: Date.now()
   })
-
-  // Optional: Cap the history at 50 items so the document doesn't grow infinitely
   if (doc.activities.length > 50) {
     doc.activities.pop()
   }
@@ -119,15 +103,39 @@ export const mutators = {
       id: crypto.randomUUID(),
       listId,
       title,
-      order: doc.cards.filter(c => c.listId === listId).length
+      order: doc.cards.filter(c => c.listId === listId).length,
+      archived: false, // NEW
+      tags: []        // NEW
     })
-    // LOG IT:
     logActivity(doc, `created card "${title}"`)
+  },
+
+  // --- NEW CARD MECHANICS ---
+  archiveCard: (doc, cardId) => {
+    const card = doc.cards.find(c => c.id === cardId)
+    if (card) {
+      card.archived = !card.archived;
+      logActivity(doc, `${card.archived ? 'archived' : 'restored'} card "${card.title}"`)
+    }
+  },
+
+  addTag: (doc, cardId, tagText) => {
+    const card = doc.cards.find(c => c.id === cardId)
+    if (card) {
+      if (!card.tags) card.tags = []
+      if (!card.tags.includes(tagText)) card.tags.push(tagText)
+    }
+  },
+
+  removeTag: (doc, cardId, tagText) => {
+    const card = doc.cards.find(c => c.id === cardId)
+    if (card && card.tags) {
+      card.tags = card.tags.filter(t => t !== tagText)
+    }
   },
 
   addComment: (doc, { cardId, text, author = "Anonymous" }) => {
     if (!doc.comments) doc.comments = []
-    
     doc.comments.push({
       id: crypto.randomUUID(),
       cardId,
@@ -140,14 +148,11 @@ export const mutators = {
   moveCard: (doc, cardId, destListId, destIndex) => {
     const card = doc.cards.find(c => c.id === cardId)
     if (!card) return
-
-    // Get all cards in the destination list, sorted by their current order
     const destCards = doc.cards
       .filter(c => c.listId === destListId && c.id !== cardId)
       .sort((a, b) => a.order - b.order)
 
     let newOrder = 0
-
     if (destCards.length === 0) {
       newOrder = 1000 
     } else if (destIndex === 0) {
@@ -164,8 +169,6 @@ export const mutators = {
     card.order = newOrder
 
     const destList = doc.lists.find(l => l.id === destListId)
-    
-    // LOG IT:
     if (destList) {
       logActivity(doc, `moved "${card.title}" to ${destList.title}`)
     }
@@ -178,7 +181,7 @@ export const mutators = {
 
   deleteCard: (doc, cardId) => {
     const cardIndex = doc.cards.findIndex(c => c.id === cardId)
-    if (cardIndex !== -1) doc.cards.splice(cardIndex, 1) // Modern Automerge prefers splice over delete
+    if (cardIndex !== -1) doc.cards.splice(cardIndex, 1)
   },
 
   createComment: (doc, cardId, body) => {
