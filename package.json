@@ -1,0 +1,51 @@
+{
+  "name": "trellis-modern",
+  "productName": "Trellis Modern",
+  "version": "0.2.0",
+  "private": true,
+  "description": "A modern re-implementation of the MPL Trellis application",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron": "electron ."
+  },
+  "keywords": [
+    "trello",
+    "crdt",
+    "automerge",
+    "offline-first",
+    "electron"
+  ],
+  "author": "Choxi (Modernized)",
+  "license": "MIT",
+  "dependencies": {
+    "@automerge/automerge": "^2.2.8",
+    "@automerge/automerge-repo": "^1.2.1",
+    "@automerge/automerge-repo-network-broadcastchannel": "^2.5.5",
+    "@automerge/automerge-repo-network-websocket": "^1.2.1",
+    "@automerge/automerge-repo-react-hooks": "^1.2.1",
+    "@automerge/automerge-repo-storage-indexeddb": "^2.5.5",
+    "@hello-pangea/dnd": "^18.0.1",
+    "dotenv": "^16.4.5",
+    "electron-log": "^5.1.2",
+    "multicast-dns": "^7.2.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.2.0",
+    "vite-plugin-electron": "^0.28.4",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0"
+  }
+}

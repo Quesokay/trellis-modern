@@ -1,0 +1,87 @@
+/* --- Placeholder State (When not editing) --- */
+.AddCard-placeholder {
+  padding: 8px 10px;
+  color: #5e6c84;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.2s, color 0.2s;
+  margin-top: 2px;
+}
+
+.AddCard-placeholder:hover {
+  background-color: rgba(9, 30, 66, 0.08);
+  color: #172b4d;
+  text-decoration: none;
+}
+
+/* --- Active Editing State --- */
+.AddCard {
+  padding-top: 4px;
+}
+
+/* The Textarea */
+.AddCard-input {
+  box-sizing: border-box;
+  width: 100%;
+  border: none;
+  border-radius: 3px;
+  /* Soft shadow for depth instead of a harsh border */
+  box-shadow: 0 1px 0 rgba(9, 30, 66, 0.25); 
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  resize: none;
+  min-height: 54px;
+  font-family: inherit;
+  font-size: 14px;
+  color: #172b4d;
+  background: #fff;
+}
+
+/* Modern focus ring */
+.AddCard-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #4c9aff; 
+}
+
+/* Container for the buttons */
+.AddCard-controls {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+/* The Submit Button */
+.AddCard-submit {
+  background-color: #5ba4cf; /* Classic Trello Blue */
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.AddCard-submit:hover {
+  background-color: #298fca;
+}
+
+/* The Cancel Button (X) */
+.AddCard-cancel {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 24px;
+  color: #6b778c;
+  cursor: pointer;
+  margin-left: 8px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.AddCard-cancel:hover {
+  color: #172b4d;
+}

@@ -1,0 +1,38 @@
+.List-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+}
+
+.List {
+  background-color: #ebecf0;
+  border-radius: 3px;
+  width: 272px;
+  min-width: 272px;
+  margin: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.List-title {
+  color: #172b4d !important;
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+
+.List-delete-btn {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 20px;
+  transition: color 0.2s;
+}
+
+.List-delete-btn:hover {
+  color: white !important;
+}
+
+

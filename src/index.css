@@ -1,0 +1,204 @@
+/* --- Imports --- */
+@import url("components/add_card/add_card.css");
+@import url("components/list/list.css");
+@import url("components/card/card.css");
+@import url("components/board/board.css");
+@import url("components/inspector/inspector.css");
+@import url("components/add_list/add_list.css");
+
+/* --- Fonts --- */
+@font-face {
+  font-family: Pacifico;
+  src: url("./assets/fonts/Pacifico.ttf");
+}
+
+*, *::before, *::after {
+  box-sizing: border-box; /* THIS PREVENTS OVERFLOW BUGS */
+}
+
+/* --- Variables --- */
+:root {
+  --color-app: #3F88C5;
+  --color-dark: #3E363F;
+  --color-dim: #777;
+  --color-medium: #A2AEBB;
+  --color-light: white;
+  --sidebar-width: 300px;
+}
+
+/* --- Base Reset & Global Typography --- */
+html, body, #root, .App {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--color-app);
+  /* Force modern sans-serif globally */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* Form elements do not inherit fonts by default, we must force them */
+input, textarea, button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* --- The Nuclear Layout Grid --- */
+.App {
+  display: grid;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  /* Columns: Flexible Board | 300px Sidebar */
+  grid-template-columns: 1fr 300px;
+  /* Rows: Flexible Main Area | Auto-sized Inspector */
+  grid-template-rows: 1fr auto;
+  /* Map the areas explicitly */
+  grid-template-areas: 
+    "board sidebar"
+    "inspector sidebar";
+}
+
+/* --- Board Styling --- */
+.Board {
+  grid-area: board;
+  background-color: var(--color-app);
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Custom Scrollbar for the Board */
+.Board::-webkit-scrollbar {
+  height: 10px;
+}
+.Board::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.1); 
+}
+.Board::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.4); 
+  border-radius: 5px;
+}
+.Board::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.6); 
+}
+
+/* Board Header */
+.Board-header {
+  padding: 40px 0 20px 0;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.Board-title {
+  color: white;
+  font-size: 42px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -1px;
+}
+
+/* --- Sidebar Styling --- */
+.Sidebar {
+  grid-area: sidebar;
+  background-color: #fff;
+  border-left: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+/* Target ALL direct children of the Sidebar for perfect padding */
+.Sidebar > div {
+  padding: 24px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.Sidebar-header {
+  font-weight: 800;
+  font-size: 13px;
+  color: #5e6c84;
+  margin-top: 0;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.Network, .Documents, .Changes {
+  padding: 20px 24px; /* Proper breathing room */
+  border-bottom: 1px solid #eee;
+}
+
+.Sidebar-header {
+  font-weight: 800;
+  font-size: 13px;
+  color: #5e6c84;
+  margin-top: 15px; /* Separation from previous sections */
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.Sidebar-icon {
+  height: 20px;
+  margin-left: 8px;
+  order: 2;
+}
+
+/* --- Inspector Container Styling --- */
+.Inspector {
+  grid-area: inspector;
+  background-color: #fff;
+  border-top: 1px solid #ccc;
+  padding: 20px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* --- LED Status Indicators --- */
+.Peer-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 12px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.is-online { background-color: #93C43E; box-shadow: 0 0 5px #93C43E; }
+
+/* --- Trello-style Document Cards --- */
+.DocumentItem {
+  background: white;
+  border: 1px solid #E2E4E6;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  cursor: pointer;
+}
+
+.DocumentItem:hover {
+  background: #f4f5f7;
+}
+
+.DocumentItem-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #4D4D4D;
+}
+
+/* --- Utility --- */
+h3 { margin: 0; }
+hr { border: 0; border-top: 1px solid #EEE; margin: 20px 0; }
