@@ -70,7 +70,7 @@ export const mutators = {
     doc.cards = data.cards || []
     doc.lists = data.lists || []
     doc.comments = []
-    doc.docId = generateDocId()
+    doc.docId = window.location.hash.replace(/^#/, '') 
     doc.boardTitle = humanize(doc.docId)
     logActivity(doc, "initialized the board")
   },

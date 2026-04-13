@@ -1,87 +1,96 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { DragDropContext } from '@hello-pangea/dnd'
 import List from '../list/list.jsx' 
 import AddList from '../add_list/add_list.jsx'
 import { mutators } from '../../lib/store'
 import './board.css'
 
-export default function Board({ doc, changeDoc, highlightOptions, onCardClick }) {
+export default function Board({ doc, changeDoc, handle, highlightOptions, onCardClick }) {
   const [showArchived, setShowArchived] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(''); // OPTION 2: Search state
+  const [searchQuery, setSearchQuery] = useState('');
 
-  if (!doc || !doc.lists) return null
+  // --- 1. ROCK-SOLID CUSTOM AWARENESS ENGINE ---
+  const [localState, setLocalState] = useState({ 
+    name: localStorage.getItem("peerName") || `User-${Math.floor(Math.random() * 1000)}`, 
+    focusedCardId: null 
+  });
+  const [remoteStates, setRemoteStates] = useState({});
+
+  useEffect(() => {
+    // Ultimate safety guard: If the app hasn't provided the handle yet, do nothing.
+    if (!handle) return; 
+    
+    // Listen for other peers sending their presence data
+    const handleMessage = (event) => {
+      // event contains { senderId, message }
+      setRemoteStates(prev => ({ ...prev, [event.senderId]: event.message }));
+    };
+    
+    handle.on("ephemeral-message", handleMessage);
+    
+    // Broadcast our state instantly (e.g., when we click a card)
+    handle.broadcast(localState);
+    
+    // Heartbeat: Keep broadcasting every 2.5s so newly joined peers see us
+    const interval = setInterval(() => {
+      handle.broadcast(localState);
+    }, 2500);
+
+    return () => {
+      // Clean up cleanly on unmount
+      handle.off("ephemeral-message", handleMessage);
+      clearInterval(interval);
+    };
+  }, [handle, localState]);
+  // ---------------------------------------------
+
+  if (!doc || !doc.lists) return null;
+
+  const remotePeers = Object.values(remoteStates).filter(s => s && s.name);
 
   const onDragEnd = (result) => {
-    const { destination, source, draggableId } = result
-    if (!destination) return
-    if (destination.droppableId === source.droppableId && destination.index === source.index) return
-
-    changeDoc(d => {
-      mutators.moveCard(d, draggableId, destination.droppableId, destination.index)
-    })
+    const { destination, source, draggableId } = result;
+    if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) return;
+    changeDoc(d => mutators.moveCard(d, draggableId, destination.droppableId, destination.index));
   }
-
-  const sortedLists = [...doc.lists].sort((a, b) => (a.order || 0) - (b.order || 0))
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="Board">
-        <div className="Board-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+        
+        {/* PRESENCE BAR */}
+        <div style={{ background: '#f0f2f5', padding: '5px 20px', fontSize: '11px', display: 'flex', gap: '10px', borderBottom: '1px solid #ddd' }}>
+          <span style={{color: '#36b37e'}}>● You</span>
+          {remotePeers.map((p, i) => <span key={i}>● {p.name}</span>)}
+        </div>
+
+        <div className="Board-header" style={{ display: 'flex', padding: '20px', gap: '20px', alignItems: 'center' }}>
           <input 
             className="Board-title" 
             value={doc.boardTitle && doc.boardTitle.startsWith("automerge:") ? "" : (doc.boardTitle || "")} 
-            placeholder="Untitled Board"
+            placeholder="Board Title"
             onChange={(e) => changeDoc(d => mutators.updateBoardTitle(d, e.target.value))}
-            onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
             style={{ background: 'transparent', border: 'none', fontSize: '2em', fontWeight: 'bold', outline: 'none', flex: 1 }}
           />
-          
-          {/* SEARCH & ACTIONS AREA */}
-          <div className="Board-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <input 
-              type="text"
-              placeholder="🔍 Filter cards or tags..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                padding: '6px 12px',
-                borderRadius: '20px',
-                border: '1px solid #ddd',
-                fontSize: '13px',
-                outline: 'none',
-                width: '220px',
-                background: '#fff'
-              }}
-            />
-
-            <button 
-              onClick={() => setShowArchived(!showArchived)}
-              style={{ 
-                padding: '6px 12px', fontSize: '12px', borderRadius: '4px', cursor: 'pointer',
-                background: showArchived ? '#4C9AFF' : '#f4f5f7', color: showArchived ? 'white' : '#5e6c84',
-                border: '1px solid #ddd', fontWeight: 'bold', whiteSpace: 'nowrap'
-              }}
-            >
-              {showArchived ? '📂 Hide Archived' : '📁 Show Archived'}
-            </button>
-          </div>
+          <input 
+            type="text" placeholder="🔍 Search cards..." value={searchQuery} 
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: '20px', border: '1px solid #ddd', outline: 'none', width: '200px' }}
+          />
+          <button onClick={() => setShowArchived(!showArchived)} style={{ padding: '8px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>
+            {showArchived ? '📂 Hide' : '📁 Show'} Archived
+          </button>
         </div>
 
         <div className="Board-lists">
-          {sortedLists.map(list => {
-            // UPDATED FILTER: Check List ID, Archive status, AND the Search Query
+          {[...doc.lists].sort((a,b) => (a.order||0)-(b.order||0)).map(list => {
             const listCards = (doc.cards || []).filter(c => {
               const inList = c.listId === list.id;
               const isVisible = showArchived ? true : !c.archived;
-              
-              // Search Logic: Check title or tags
-              const query = searchQuery.toLowerCase();
-              const matchesTitle = c.title.toLowerCase().includes(query);
-              const matchesTags = (c.tags || []).some(tag => tag.toLowerCase().includes(query));
-              
-              return inList && isVisible && (matchesTitle || matchesTags);
-            })
-              
+              const matches = c.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                              (c.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+              return inList && isVisible && matches;
+            });
             return (
               <List 
                 key={list.id} 
@@ -89,8 +98,11 @@ export default function Board({ doc, changeDoc, highlightOptions, onCardClick })
                 cards={listCards} 
                 doc={doc} 
                 changeDoc={changeDoc} 
-                highlightOptions={highlightOptions} 
-                onCardClick={onCardClick} 
+                highlightOptions={highlightOptions}
+                onCardClick={onCardClick}
+                // Our custom state objects are 100% compatible with the List and Card props!
+                remoteAwareness={remoteStates}
+                setLocalAwareness={setLocalState}
               />
             )
           })}
