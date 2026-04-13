@@ -1,132 +1,103 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, clipboard } from 'electron';
 import path from 'path';
 import mdns from 'multicast-dns';
 import { WebSocketServer } from 'ws';
-import os from 'os';
+import fs from 'fs';
 
-// 🚨 THE ESM BYPASS 🚨
-// This hides the dynamic import from Vite's bundler, forcing Node.js 
-// to load the Automerge ESM packages natively at runtime.
+console.log("🟢 1. ELECTRON IS AWAKE!");
+
 const importDynamic = new Function('modulePath', 'return import(modulePath)');
-
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
 // --- 1. SINGLE INSTANCE LOCK ---
-const isPrimary = app.requestSingleInstanceLock();
-if (!isPrimary) {
-  app.quit();
-}
+// const isPrimary = app.requestSingleInstanceLock();
+// if (!isPrimary) {
+//   console.log("🔴 2. APP LOCK IS TAKEN BY A GHOST PROCESS! QUITTING...");
+//   app.quit();
+//   process.exit(0); // Force kill
+// }
+const isPrimary = true; // TEMPORARILY DISABLING SINGLE INSTANCE LOCK FOR TESTING
+console.log("🟢 2. GOT INSTANCE LOCK.");
 
-// --- 2. P2P HUB LOGIC ---
 const mdnsInstance = mdns();
 const PORT = 3030;
+const SAVE_DIRECTORY = app.getPath('userData');
 
-// Note: Made this function async to support 'await'
+let mainWindow;
+
 async function createWindow() {
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'), 
-      nodeIntegration: true,
-      contextIsolation: false, 
-    }
-  });
-
-  // Recreate the original Menubar template
-  const template = [
-    {
-      label: 'Document',
-      submenu: [
-        {
-          label: 'New', accelerator: 'CmdOrCtrl+N', click: () => {
-            mainWindow.webContents.send("new")
-          }
-        },
-        {
-          label: 'Open from Clipboard', accelerator: 'CmdOrCtrl+O', click: () => {
-            mainWindow.webContents.send("openFromClipboard", clipboard.readText())
-          }
-        },
-        {
-          label: 'Share to Clipboard', accelerator: 'CmdOrCtrl+H', click: () => {
-            mainWindow.webContents.send("shareToClipboard")
-          }
-        },
-        {
-          label: 'Fork', accelerator: 'CmdOrCtrl+Y', click: () => {
-            mainWindow.webContents.send("forkDocument")
-          }
-        },
-        { type: "separator" }
-      ]
-    },
-    {
-      label: "Edit",
-      submenu: [
-        { label: "Cut", accelerator: "CmdOrCtrl+X", role: "cut" },
-        { label: "Copy", accelerator: "CmdOrCtrl+C", role: "copy" },
-        { label: "Paste", accelerator: "CmdOrCtrl+V", role: "paste" },
-        { label: "Select All", accelerator: "CmdOrCtrl+A", role: "selectAll" }
-      ]
-    },
-    {
-      label: "Dev",
-      submenu: [
-        {
-          label: "Refresh", accelerator: 'CmdOrCtrl+R', click: (item, focusedWindow) => {
-            focusedWindow?.webContents.reload()
-          }
-        },
-        {
-          label: "Open Inspector", accelerator: 'CmdOrCtrl+Option+I', click: (item, focusedWindow) => {
-            focusedWindow?.webContents.toggleDevTools()
-          }
-        }
-      ]
-    }
-  ];
-
-  if (process.platform === 'darwin') {
-    template.unshift({
-      label: app.getName(),
-      submenu: [{ role: 'about' }, { role: 'quit' }]
+  console.log("🟢 3. CREATING WINDOW...");
+  try {
+    mainWindow = new BrowserWindow({
+      width: 1200,
+      height: 800,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'), 
+        nodeIntegration: true,
+        contextIsolation: false, 
+      }
     });
+
+    const template = [
+      {
+        label: 'Document',
+        submenu: [
+          { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => { if (mainWindow) mainWindow.webContents.send("new") } },
+          { label: 'Open from Clipboard', accelerator: 'CmdOrCtrl+O', click: () => { if (mainWindow) mainWindow.webContents.send("openFromClipboard", clipboard.readText()) } },
+          { label: 'Share to Clipboard', accelerator: 'CmdOrCtrl+H', click: () => { if (mainWindow) mainWindow.webContents.send("shareToClipboard") } },
+          { label: 'Fork', accelerator: 'CmdOrCtrl+Y', click: () => { if (mainWindow) mainWindow.webContents.send("forkDocument") } },
+          { type: "separator" }
+        ]
+      }
+    ];
+
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+
+    if (isDev) {
+      console.log("🟢 4. LOADING VITE URL...");
+      mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    } else {
+      console.log("🟢 4. LOADING LOCAL FILE...");
+      mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    }
+
+    if (isPrimary) {
+      console.log("🟢 5. STARTING WEBSOCKET SERVER...");
+      const wss = new WebSocketServer({ port: PORT });
+      
+      wss.on('error', (err) => {
+        console.error("🔴 WEBSOCKET ERROR (PORT PROBABLY IN USE):", err);
+      });
+
+      console.log("🟢 6. IMPORTING AUTOMERGE...");
+      const { Repo } = await importDynamic('@automerge/automerge-repo');
+      const { NodeWSServerAdapter } = await importDynamic('@automerge/automerge-repo-network-websocket');
+
+      console.log("🟢 7. INITIALIZING REPO...");
+      const relayRepo = new Repo({
+        network: [new NodeWSServerAdapter(wss)],
+        isServer: true,
+        sharePolicy: async () => true,
+      });
+
+      const announce = () => {
+        mdnsInstance.respond({
+          answers: [{ name: 'trellis-sync.local', type: 'SRV', data: { port: PORT, target: '127.0.0.1' } }]
+        });
+      };
+      setInterval(announce, 5000);
+      announce();
+      console.log("🟢 8. APP FULLY LOADED AND READY!");
+    }
+  } catch (err) {
+    console.error("🔴 CATASTROPHIC ERROR IN CREATEWINDOW:", err);
   }
+}
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+// IPC Handlers
+ipcMain.on('shareToClipboardResult', (e, docId) => clipboard.writeText(docId));
+ipcMain.handle('save-file', async (e, name, data) => { await fs.promises.writeFile(path.join(SAVE_DIRECTORY, name), data); return true; });
+ipcMain.handle('read-file', async (e, name) => { const p = path.join(SAVE_DIRECTORY, name); if (fs.existsSync(p)) return await fs.promises.readFile(p, 'utf-8'); });
 
-  // Load the app via Vite in dev, or local index.html in production
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-};
-
-// --- IPC HANDLERS FOR FILE SYSTEM AND CLIPBOARD ---
-
-ipcMain.on('shareToClipboardResult', (event, docId) => {
-  clipboard.writeText(docId);
-});
-
-ipcMain.handle('save-file', async (event, fileName, data) => {
-  const savePath = path.join(SAVE_DIRECTORY, fileName);
-  await fs.promises.writeFile(savePath, data);
-  return true;
-});
-
-ipcMain.handle('read-file', async (event, fileName) => {
-  const savePath = path.join(SAVE_DIRECTORY, fileName);
-  if (fs.existsSync(savePath)) {
-    return await fs.promises.readFile(savePath, 'utf-8');
-  }
-});
-
-app.whenReady().then(createWindow);
+app.whenReady().then(createWindow).catch(err => console.error("🔴 WHENREADY ERROR:", err));
 app.on('window-all-closed', () => { app.quit(); process.exit(0); });

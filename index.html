@@ -4,17 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trellis Modern</title>
-
-    <script>
-      window.global = window;
-      window.process = { 
-        env: { NODE_ENV: 'development' },
-        version: '',
-        nextTick: (fn) => setTimeout(fn, 0)
-      };
-      // Buffer is often required by P2P and CRDT libraries like Automerge
-      window.Buffer = window.Buffer || []; 
-    </script>
   </head>
   <body>
     <div id="root"></div>
