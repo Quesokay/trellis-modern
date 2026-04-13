@@ -3,15 +3,15 @@ import path from 'path';
 import mdns from 'multicast-dns';
 import { WebSocketServer } from 'ws';
 import os from 'os';
-import { fileURLToPath } from 'url'; // Required for ESM __dirname
+import { fileURLToPath } from 'url'; // Required for ESM pathing
 import { Repo } from '@automerge/automerge-repo';
 import { NodeWSServerAdapter } from '@automerge/automerge-repo-network-websocket';
 
-// --- ESM __dirname SHIM ---
-// This makes __dirname work in "type": "module" projects
+// --- 1. ESM PATH SHIM ---
+// This ensures __dirname works correctly in your "type": "module" project
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// --- 1. THE LOCK BREAKER ---
+// --- 2. THE LOCK BREAKER ---
 const isPrimary = app.requestSingleInstanceLock();
 
 if (!isPrimary) {
@@ -23,7 +23,7 @@ if (!isPrimary) {
   console.log(`\n✅ PRIMARY INSTANCE: Connected to saved local database!`);
 }
 
-// --- 2. P2P & DISCOVERY CONFIG ---
+// --- 3. P2P & DISCOVERY CONFIG ---
 const mdnsInstance = mdns();
 const PORT = 3030;
 
@@ -39,27 +39,31 @@ function getLocalIP() {
 
 const myIP = getLocalIP();
 
-// --- 3. WINDOW MANAGEMENT ---
+// --- 4. WINDOW MANAGEMENT ---
 function createWindow() {
+  // Check if we are in development mode
+  const isDev = !!process.env.VITE_DEV_SERVER_URL;
+
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true, // Keep as per your current setup
-      contextIsolation: false, // Keep as per your current setup
-      preload: path.join(__dirname, isDev ? 'src/preload.js' : 'dist-electron/preload.js')
+      // FIX: In production, src/ folder is gone. Use bundled preload in dist-electron/
+      preload: path.join(__dirname, isDev ? 'src/preload.js' : 'dist-electron/preload.js'),
+      nodeIntegration: true,
+      contextIsolation: false, 
     }
   });
 
-  // --- THE STANDALONE FIX ---
+  // FIX: Load from dev server if available, otherwise load from local disk
   if (isDev) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    // In the executable, load the physical file from 'dist/'
+    // Correct production path to the bundled UI
     win.loadFile(path.join(__dirname, 'dist/index.html'));
   }
 
-  // --- 4. CONDITIONAL P2P HUB ---
+  // --- 5. CONDITIONAL P2P HUB ---
   if (isPrimary) {
     const wss = new WebSocketServer({ port: PORT });
     console.log(`\n🚀 P2P Hub started on ws://127.0.0.1:${PORT}`);
@@ -76,12 +80,11 @@ function createWindow() {
 
     relayRepo.networkSubsystem.on('message', (msg) => {
       if (msg.documentId && msg.type !== 'error') {
-        console.log(`[HUB] 📡 Packet intercepted for doc: ${msg.documentId}`);
         relayRepo.find(msg.documentId); 
       }
     });
 
-    // --- 5. MDNS ANNOUNCEMENT (Primary Only) ---
+    // --- 6. MDNS ANNOUNCEMENT (Primary Only) ---
     const announce = () => {
       mdnsInstance.respond({
         answers: [{
@@ -102,7 +105,6 @@ function createWindow() {
       response.answers.forEach(answer => {
         if (answer.name === 'trellis-sync.local' && answer.data.target !== myIP) {
           const peerUrl = `ws://${answer.data.target}:${answer.data.port}`;
-          console.log(`✨ Found peer via mDNS: ${peerUrl}`);
           win.webContents.send('peer-discovered', peerUrl);
         }
       });
@@ -110,22 +112,19 @@ function createWindow() {
 
     win.on('closed', () => {
       clearInterval(announcementInterval);
-      wss.close();
+      if (wss) wss.close();
     });
-  } else {
-    console.log(`\n👋 Secondary instance started. Acting as pure client.`);
   }
 }
 
-// --- 6. APP LIFECYCLE ---
+// --- 7. APP LIFECYCLE ---
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  console.log("🛑 Window closed. Terminating process forcefully.");
   app.quit();
   process.exit(0); 
 });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+}); 

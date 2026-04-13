@@ -15,8 +15,11 @@ export default defineConfig({
     topLevelAwait(),
     electron([
       {
-        // Main-Process entry file
-        entry: 'src/index.js',
+        entry: 'src/index.js', // This will output to dist-electron/index.js
+      },
+      {
+        entry: 'src/preload.js', // This will output to dist-electron/preload.js
+        onstart(options) { options.reload() },
       },
       {
         // Context Bridge (Preload script)

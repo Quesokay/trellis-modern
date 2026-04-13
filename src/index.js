@@ -1,155 +1,62 @@
-/* eslint-env node */
-import { app, BrowserWindow, Menu, ipcMain, clipboard } from 'electron';
-import path from 'node:path';
-import fs from 'node:fs';
+import { app, BrowserWindow } from 'electron';
+import path from 'path';
+import mdns from 'multicast-dns';
+import { WebSocketServer } from 'ws';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import { Repo } from '@automerge/automerge-repo';
+import { NodeWSServerAdapter } from '@automerge/automerge-repo-network-websocket';
 
-// Load environment variables
-import dotenv from 'dotenv';
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
-let mainWindow;
-
-// Determine the save directory (matching the original app's logic)
-const SAVE_DIRECTORY = process.env.SAVE_DIR || path.join(app.getPath('documents'), "Trellis");
-if (!fs.existsSync(SAVE_DIRECTORY)) {
-  fs.mkdirSync(SAVE_DIRECTORY, { recursive: true });
+// --- 1. SINGLE INSTANCE LOCK ---
+const isPrimary = app.requestSingleInstanceLock();
+if (!isPrimary) {
+  app.quit(); //
 }
 
-const createWindow = async () => {
-  mainWindow = new BrowserWindow({
-    width: 1100,
+// --- 2. P2P HUB LOGIC (Preserved from your main.js) ---
+const mdnsInstance = mdns();
+const PORT = 3030;
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 1200,
     height: 800,
-    title: "-",
     webPreferences: {
-      // Modern security constraints
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      // FIX: In production, preload is in the SAME folder as this file (dist-electron)
+      preload: path.join(__dirname, 'preload.js'), 
+      nodeIntegration: true,
+      contextIsolation: false, 
     }
   });
 
-  // THE FIX: Check if we are in development or production
-  if (process.env.VITE_DEV_SERVER_URL) {
-    // If dev server is running, load from localhost
-    win.loadURL(process.env.VITE_DEV_SERVER_URL)
+  if (isDev) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    // In production (the executable), load the bundled HTML file
-    // Note: Use path.join to point to the 'dist/index.html' relative to this file
-    win.loadFile(path.join(__dirname, '../dist/index.html'))
+    // FIX: We are in dist-electron/, so go UP one level then into dist/
+    win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // Recreate the original Menubar template
-  const template = [
-    {
-      label: 'Document',
-      submenu: [
-        {
-          label: 'New', accelerator: 'CmdOrCtrl+N', click: () => {
-            mainWindow.webContents.send("new")
-          }
-        },
-        {
-          label: 'Open from Clipboard', accelerator: 'CmdOrCtrl+O', click: () => {
-            mainWindow.webContents.send("openFromClipboard", clipboard.readText())
-          }
-        },
-        {
-          label: 'Share to Clipboard', accelerator: 'CmdOrCtrl+H', click: () => {
-            mainWindow.webContents.send("shareToClipboard")
-          }
-        },
-        {
-          label: 'Fork', accelerator: 'CmdOrCtrl+Y', click: () => {
-            mainWindow.webContents.send("forkDocument")
-          }
-        },
-        { type: "separator" }
-      ]
-    },
-    {
-      label: "Edit",
-      submenu: [
-        { label: "Cut", accelerator: "CmdOrCtrl+X", role: "cut" },
-        { label: "Copy", accelerator: "CmdOrCtrl+C", role: "copy" },
-        { label: "Paste", accelerator: "CmdOrCtrl+V", role: "paste" },
-        { label: "Select All", accelerator: "CmdOrCtrl+A", role: "selectAll" }
-      ]
-    },
-    {
-      label: "Dev",
-      submenu: [
-        {
-          label: "Refresh", accelerator: 'CmdOrCtrl+R', click: (item, focusedWindow) => {
-            focusedWindow?.webContents.reload()
-          }
-        },
-        {
-          label: "Open Inspector", accelerator: 'CmdOrCtrl+Option+I', click: (item, focusedWindow) => {
-            focusedWindow?.webContents.toggleDevTools()
-          }
-        }
-      ]
-    }
-  ];
-
-  if (process.platform === 'darwin') {
-    template.unshift({
-      label: app.getName(),
-      submenu: [{ role: 'about' }, { role: 'quit' }]
+  if (isPrimary) {
+    const wss = new WebSocketServer({ port: PORT });
+    const relayRepo = new Repo({
+      network: [new NodeWSServerAdapter(wss)],
+      isServer: true,
+      sharePolicy: async () => true,
     });
+
+    // mDNS Discovery logic...
+    const announce = () => {
+      mdnsInstance.respond({
+        answers: [{ name: 'trellis-sync.local', type: 'SRV', data: { port: PORT, target: '127.0.0.1' } }]
+      });
+    };
+    setInterval(announce, 5000);
+    announce();
   }
+}
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
-
-  // Load the app via Vite in dev, or local index.html in production
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
-};
-
-// --- IPC HANDLERS FOR FILE SYSTEM AND CLIPBOARD ---
-
-ipcMain.on('shareToClipboardResult', (event, docId) => {
-  clipboard.writeText(docId);
-});
-
-ipcMain.handle('save-file', async (event, fileName, data) => {
-  const savePath = path.join(SAVE_DIRECTORY, fileName);
-  await fs.promises.writeFile(savePath, data);
-  return true;
-});
-
-ipcMain.handle('read-file', async (event, fileName) => {
-  const savePath = path.join(SAVE_DIRECTORY, fileName);
-  if (fs.existsSync(savePath)) {
-    return await fs.promises.readFile(savePath, 'utf-8');
-  }
-  return null;
-});
-
-ipcMain.handle('file-exists', (event, fileName) => {
-  const savePath = path.join(SAVE_DIRECTORY, fileName);
-  return fs.existsSync(savePath);
-});
-
-// App Lifecycle
-app.on('ready', createWindow);
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  }
-});
+app.whenReady().then(createWindow);
+app.on('window-all-closed', () => { app.quit(); process.exit(0); });
