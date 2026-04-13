@@ -3,8 +3,13 @@ import path from 'path';
 import mdns from 'multicast-dns';
 import { WebSocketServer } from 'ws';
 import os from 'os';
+import { fileURLToPath } from 'url'; // Required for ESM __dirname
 import { Repo } from '@automerge/automerge-repo';
 import { NodeWSServerAdapter } from '@automerge/automerge-repo-network-websocket';
+
+// --- ESM __dirname SHIM ---
+// This makes __dirname work in "type": "module" projects
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- 1. THE LOCK BREAKER ---
 const isPrimary = app.requestSingleInstanceLock();
@@ -40,16 +45,21 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false, 
+      nodeIntegration: true, // Keep as per your current setup
+      contextIsolation: false, // Keep as per your current setup
+      preload: path.join(__dirname, isDev ? 'src/preload.js' : 'dist-electron/preload.js')
     }
   });
 
-  // Load your Vite dev server (UI)
-  win.loadURL('http://localhost:5173');
+  // --- THE STANDALONE FIX ---
+  if (isDev) {
+    win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    // In the executable, load the physical file from 'dist/'
+    win.loadFile(path.join(__dirname, 'dist/index.html'));
+  }
 
-  // --- 4. CONDITIONAL P2P HUB (THE FIX) ---
-  // Only the PRIMARY window is allowed to start the server!
+  // --- 4. CONDITIONAL P2P HUB ---
   if (isPrimary) {
     const wss = new WebSocketServer({ port: PORT });
     console.log(`\n🚀 P2P Hub started on ws://127.0.0.1:${PORT}`);
@@ -60,21 +70,13 @@ function createWindow() {
       sharePolicy: async (peerId) => true,
     });
 
-    // --- THE DEEP X-RAY & ACTIVE CACHE HACK ---
     relayRepo.networkSubsystem.on('peer', ({ peerId }) => {
       console.log(`\n[HUB] 🟢 Connected to peer: ${peerId}`);
     });
 
-    relayRepo.networkSubsystem.on('peer-disconnected', ({ peerId }) => {
-      console.log(`\n[HUB] 🔴 Disconnected from peer: ${peerId}`);
-    });
-
-    // INTERCEPTOR: Actively snatch requested documents into the Hub's memory
     relayRepo.networkSubsystem.on('message', (msg) => {
       if (msg.documentId && msg.type !== 'error') {
-        console.log(`[HUB] 📡 Packet intercepted for doc: ${msg.documentId} (Type: ${msg.type})`);
-        
-        // Force the Hub to actively download and hold the document in memory
+        console.log(`[HUB] 📡 Packet intercepted for doc: ${msg.documentId}`);
         relayRepo.find(msg.documentId); 
       }
     });
@@ -111,7 +113,6 @@ function createWindow() {
       wss.close();
     });
   } else {
-    // This is Window B! It doesn't start a server.
     console.log(`\n👋 Secondary instance started. Acting as pure client.`);
   }
 }
@@ -120,7 +121,6 @@ function createWindow() {
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
-  // NUCLEAR QUIT: Destroy the process immediately when the window closes
   console.log("🛑 Window closed. Terminating process forcefully.");
   app.quit();
   process.exit(0); 
