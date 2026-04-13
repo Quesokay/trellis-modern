@@ -4,7 +4,6 @@
   "version": "0.2.0",
   "private": true,
   "description": "A modern re-implementation of the MPL Trellis application",
-  "type": "module",
   "main": "dist-electron/index.js",
   "scripts": {
     "dev": "vite",
@@ -25,7 +24,6 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "main.js",
       "package.json"
     ],
     "mac": {
@@ -58,11 +56,13 @@
     "@automerge/automerge-repo-react-hooks": "^1.2.1",
     "@automerge/automerge-repo-storage-indexeddb": "^2.5.5",
     "@hello-pangea/dnd": "^18.0.1",
+    "bufferutil": "^4.1.0",
     "dotenv": "^16.4.5",
     "electron-log": "^5.1.2",
     "multicast-dns": "^7.2.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "utf-8-validate": "^6.0.6",
     "ws": "^8.20.0"
   },
   "devDependencies": {

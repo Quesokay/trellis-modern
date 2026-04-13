@@ -16,6 +16,21 @@ export default defineConfig({
     electron([
       {
         entry: 'src/index.js', // This will output to dist-electron/index.js
+        vite: {
+          build: {
+            rollupOptions: {
+              external: [
+                'bufferutil', 
+                'utf-8-validate', 
+                'multicast-dns', 
+                'ws',
+                '@automerge/automerge',
+                '@automerge/automerge-repo',
+                '@automerge/automerge-repo-network-websocket'
+              ],
+            },
+          },
+        },
       },
       {
         entry: 'src/preload.js', // This will output to dist-electron/preload.js
@@ -29,7 +44,9 @@ export default defineConfig({
         },
       },
     ]),
-    renderer(),
+    renderer({
+      nodeIntegration: true,
+    }),
   ],
   
   // Ensures Vite outputs the compiled React code exactly where electron-builder expects it
