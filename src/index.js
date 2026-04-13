@@ -28,6 +28,16 @@ const createWindow = async () => {
     }
   });
 
+  // THE FIX: Check if we are in development or production
+  if (process.env.VITE_DEV_SERVER_URL) {
+    // If dev server is running, load from localhost
+    win.loadURL(process.env.VITE_DEV_SERVER_URL)
+  } else {
+    // In production (the executable), load the bundled HTML file
+    // Note: Use path.join to point to the 'dist/index.html' relative to this file
+    win.loadFile(path.join(__dirname, '../dist/index.html'))
+  }
+
   // Recreate the original Menubar template
   const template = [
     {

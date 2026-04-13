@@ -5,37 +5,39 @@ import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-networ
 import uuid from './uuid.js'
 import seedData from './seed_data.js'
 
-// 1. DEBUG LOGGING
-if (typeof window !== 'undefined') {
-  window.localStorage.debug = 'automerge-repo:*';
-}
-
+// 1. IDENTITY INITIALIZATION
+// These are used for presence indicators and comments
 const peerName = localStorage.getItem("peerName") || `User-${Math.floor(Math.random() * 1000)}`;
+const peerColor = localStorage.getItem("peerColor") || `#${Math.floor(Math.random()*16777215).toString(16)}`;
+
+if (!localStorage.getItem("peerColor")) {
+  localStorage.setItem("peerColor", peerColor);
+}
 
 // 2. THE HMR SINGLETON SAFETY VALVE
 // Prevents multiple IndexedDB connections during Vite hot-reloads
 let activeRepo;
 
 if (typeof globalThis !== 'undefined' && globalThis.__TRELLIS_REPO__) {
-  console.log("♻️ [HMR] Reusing existing Automerge Engine. Disk lock protected.");
   activeRepo = globalThis.__TRELLIS_REPO__;
 } else {
   const myUniqueId = `client-${Math.random().toString(36).substring(2, 9)}`;
+  
+  // The WebSocket adapter is great for server-based sync
   const wsAdapter = new BrowserWebSocketClientAdapter("ws://127.0.0.1:3030");
   
-  // Wiretap the adapter for terminal visibility
-  wsAdapter.on("ready", () => console.log("🔥 ADAPTER: Ready & Listening"));
-  wsAdapter.on("peer-candidate", ({ peerId }) => console.log("🔥 ADAPTER: Found peer:", peerId));
+  // The BroadcastChannel adapter is CRITICAL for standalone mode
+  // it allows different windows/instances on the same machine to sync without a server.
+  const bcAdapter = new BroadcastChannelNetworkAdapter();
 
   activeRepo = new Repo({
     peerId: myUniqueId,
     storage: new IndexedDBStorageAdapter("trellis-local-db"),
-    network: [ wsAdapter ], 
+    network: [ bcAdapter, wsAdapter ], // Order determines primary sync method
     sharePolicy: async (peerId) => true,
   });
 
   if (typeof globalThis !== 'undefined') globalThis.__TRELLIS_REPO__ = activeRepo;
-  if (typeof window !== 'undefined') window.TrellisRepo = activeRepo;
 }
 
 export const repo = activeRepo;
@@ -59,7 +61,6 @@ const logActivity = (doc, text, author = peerName) => {
     author,
     timestamp: Date.now()
   })
-  // Keep history manageable (last 50 items)
   if (doc.activities.length > 50) doc.activities.pop()
 }
 
@@ -78,14 +79,14 @@ export const mutators = {
   updateBoardTitle: (doc, newTitle) => {
     const oldTitle = doc.boardTitle;
     doc.boardTitle = newTitle;
-    // Log change only if it's a substantial rename
     if (newTitle !== oldTitle && newTitle.length > 2) {
        logActivity(doc, `renamed board to "${newTitle}"`)
     }
   },
 
   createList: (doc, attributes) => {
-    const newList = { ...attributes, id: uuid() };
+    const newList = { ...attributes, id: uuid(), order: doc.lists.length * 1000 };
+    if (!doc.lists) doc.lists = []
     doc.lists.push(newList)
     logActivity(doc, `created list "${attributes.title}"`)
   },
@@ -93,7 +94,7 @@ export const mutators = {
   deleteList: (doc, listId) => {
     const list = doc.lists.find(l => l.id === listId);
     doc.lists = doc.lists.filter(l => l.id !== listId)
-    doc.cards = doc.cards.filter(c => c.listId !== listId)
+    doc.cards = (doc.cards || []).filter(c => c.listId !== listId)
     logActivity(doc, `deleted list "${list?.title || 'Unknown'}"`)
   },
 
@@ -103,9 +104,10 @@ export const mutators = {
       id: crypto.randomUUID(),
       listId,
       title,
-      order: doc.cards.filter(c => c.listId === listId).length,
+      order: doc.cards.filter(c => c.listId === listId).length * 1000,
       archived: false,
-      tags: []
+      tags: [],
+      description: ""
     };
     doc.cards.push(newCard)
     logActivity(doc, `created card "${title}"`)
@@ -173,9 +175,7 @@ export const mutators = {
 
   updateCardTitle: (doc, cardId, newTitle) => {
     const card = doc.cards.find(c => c.id === cardId)
-    if (card) {
-      card.title = newTitle;
-    }
+    if (card) card.title = newTitle;
   },
 
   deleteCard: (doc, cardId) => {
