@@ -11,7 +11,34 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron": "electron ."
+    "electron": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "vite build && electron-builder"
+  },
+  "build": {
+    "appId": "com.choxi.trellismodern",
+    "productName": "Trellis Modern",
+    "directories": {
+      "output": "release/"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "main.js",
+      "package.json"
+    ],
+    "mac": {
+      "target": "dmg",
+      "icon": "src/assets/Logo.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/Logo.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "src/assets/Logo.png"
+    }
   },
   "keywords": [
     "trello",

@@ -1,15 +1,15 @@
-const { contextBridge, ipcRenderer } = require("electron");
-contextBridge.exposeInMainWorld("electronAPI", {
+const { contextBridge: i, ipcRenderer: o } = require("electron");
+i.exposeInMainWorld("electronAPI", {
   // File System Operations (Replacing direct 'fs' imports)
-  saveFile: (fileName, data) => ipcRenderer.invoke("save-file", fileName, data),
-  readFile: (fileName) => ipcRenderer.invoke("read-file", fileName),
-  fileExists: (fileName) => ipcRenderer.invoke("file-exists", fileName),
-  getAppPath: () => ipcRenderer.invoke("get-app-path"),
+  saveFile: (e, n) => o.invoke("save-file", e, n),
+  readFile: (e) => o.invoke("read-file", e),
+  fileExists: (e) => o.invoke("file-exists", e),
+  getAppPath: () => o.invoke("get-app-path"),
   // Listeners for Menu actions triggered in the Main Process
-  onNewDocument: (callback) => ipcRenderer.on("new", callback),
-  onForkDocument: (callback) => ipcRenderer.on("forkDocument", callback),
-  onOpenFromClipboard: (callback) => ipcRenderer.on("openFromClipboard", (_event, url) => callback(url)),
-  onShareToClipboard: (callback) => ipcRenderer.on("shareToClipboard", callback),
+  onNewDocument: (e) => o.on("new", e),
+  onForkDocument: (e) => o.on("forkDocument", e),
+  onOpenFromClipboard: (e) => o.on("openFromClipboard", (n, r) => e(r)),
+  onShareToClipboard: (e) => o.on("shareToClipboard", e),
   // Sending data back to the Main Process clipboard
-  shareToClipboardResult: (docId) => ipcRenderer.send("shareToClipboardResult", docId)
+  shareToClipboardResult: (e) => o.send("shareToClipboardResult", e)
 });

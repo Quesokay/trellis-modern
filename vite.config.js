@@ -6,6 +6,9 @@ import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
 
 export default defineConfig({
+  // CRITICAL: Ensures assets are loaded with relative paths in the compiled Electron app
+  base: './', 
+  
   plugins: [
     react(),
     wasm(),
@@ -25,4 +28,10 @@ export default defineConfig({
     ]),
     renderer(),
   ],
+  
+  // Ensures Vite outputs the compiled React code exactly where electron-builder expects it
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true
+  }
 })
