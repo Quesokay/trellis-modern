@@ -2,8 +2,8 @@ import { Repo } from "@automerge/automerge-repo";
 import { IndexedDBStorageAdapter } from "@automerge/automerge-repo-storage-indexeddb";
 import { BrowserWebSocketClientAdapter } from "@automerge/automerge-repo-network-websocket";
 import { BroadcastChannelNetworkAdapter } from "@automerge/automerge-repo-network-broadcastchannel";
-import uuid from './uuid.js'
-import seedData from './seed_data.js'
+import uuid from './uuid.js';
+import seedData from './seed_data.js';
 
 // 1. DEBUG LOGGING
 if (typeof window !== 'undefined') {
@@ -11,6 +11,12 @@ if (typeof window !== 'undefined') {
 }
 
 const peerName = localStorage.getItem("peerName") || `User-${Math.floor(Math.random() * 1000)}`;
+const peerColor = localStorage.getItem("peerColor") || `#${Math.floor(Math.random()*16777215).toString(16)}`;
+
+if (typeof window !== 'undefined') {
+  if (!localStorage.getItem("peerName")) localStorage.setItem("peerName", peerName);
+  if (!localStorage.getItem("peerColor")) localStorage.setItem("peerColor", peerColor);
+}
 
 // 2. THE HMR SINGLETON SAFETY VALVE
 // Prevents multiple IndexedDB connections during Vite hot-reloads
@@ -22,6 +28,9 @@ if (typeof globalThis !== 'undefined' && globalThis.__TRELLIS_REPO__) {
 } else {
   const myUniqueId = `client-${Math.random().toString(36).substring(2, 9)}`;
   const wsAdapter = new BrowserWebSocketClientAdapter("ws://127.0.0.1:3030");
+
+  // 🚨 ADD THIS: The local tab-to-tab network adapter
+  const broadcastAdapter = new BroadcastChannelNetworkAdapter();
   
   // Wiretap the adapter for terminal visibility
   wsAdapter.on("ready", () => console.log("🔥 ADAPTER: Ready & Listening"));
@@ -29,8 +38,11 @@ if (typeof globalThis !== 'undefined' && globalThis.__TRELLIS_REPO__) {
 
   activeRepo = new Repo({
     peerId: myUniqueId,
+    // 🚨 ADDED: Broadcast our name and color to other peers on the network
+    peerMetadata: { name: peerName, color: peerColor }, 
     storage: new IndexedDBStorageAdapter("trellis-local-db"),
-    network: [ wsAdapter ], 
+    // 🚨 UPDATE THIS: Add the broadcastAdapter to the network array
+    network: [ wsAdapter, broadcastAdapter ],
     sharePolicy: async (peerId) => true,
   });
 

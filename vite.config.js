@@ -15,7 +15,6 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
     nodePolyfills({
-      include: ['buffer'], // Only polyfill the buffer module
       globals: {
         Buffer: true, // Automatically inject window.Buffer
         global: true, // Automatically inject window.global
